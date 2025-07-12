@@ -38,12 +38,12 @@ export const useDirectors = () => {
         .from('directors')
         .select(`
           *,
-          profiles:user_id (
+          profiles!directors_user_id_fkey (
             first_name,
             last_name,
             phone_number
           ),
-          schools:school_id (
+          schools!directors_school_id_fkey (
             school_name
           )
         `)
