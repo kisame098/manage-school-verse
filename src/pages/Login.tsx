@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { GraduationCap, Eye, EyeOff, User, School, Phone, AlertCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,106 +9,55 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useProfile';
-import { supabase } from '@/integrations/supabase/client';
 
 interface LoginFormData {
-  email: string;
-  password: string;
+  schoolId: string;
+  personalId: string;
   firstName: string;
   lastName: string;
   phoneNumber: string;
-  schoolId: string;
+  password: string;
 }
 
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { signIn, signUp, user, loading: authLoading } = useAuth();
-  const { profile, loading: profileLoading } = useProfile();
-  const [currentTab, setCurrentTab] = useState('signin');
+  const [currentRole, setCurrentRole] = useState('student');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [formData, setFormData] = useState<LoginFormData>({
-    email: '',
-    password: '',
+    schoolId: '',
+    personalId: '',
     firstName: '',
     lastName: '',
     phoneNumber: '',
-    schoolId: ''
+    password: ''
   });
   const [errors, setErrors] = useState<Partial<LoginFormData>>({});
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user && profile && !authLoading && !profileLoading) {
-      if (profile.role === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate('/dashboard');
-      }
-    }
-  }, [user, profile, authLoading, profileLoading, navigate]);
-
-  const createAdminAccount = async () => {
-    setIsCreatingAdmin(true);
-    try {
-      console.log('Creating admin account...');
-      
-      // First, try to sign up the admin user
-      const { error: signUpError } = await signUp(
-        'admin@edumanage.com',
-        'AdminPassword123!',
-        {
-          first_name: 'Admin',
-          last_name: 'System',
-          phone_number: '+33123456789',
-          school_id: '00000',
-          role: 'admin'
-        }
-      );
-
-      if (signUpError) {
-        // If user already exists, that's fine
-        if (!signUpError.message.includes('already registered')) {
-          throw signUpError;
-        }
-        console.log('Admin user already exists');
-      } else {
-        console.log('Admin user created successfully');
-      }
-
-      // Now try to create/update the admin school
-      const { error: schoolError } = await supabase
-        .from('schools')
-        .upsert({
-          school_id: '00000',
-          school_name: 'Administration Centrale',
-          is_active: true
-        });
-
-      if (schoolError) {
-        console.error('Error creating school:', schoolError);
-      } else {
-        console.log('Admin school created/updated successfully');
-      }
-
-      toast({
-        title: "Compte administrateur créé",
-        description: "Le compte administrateur a été configuré avec succès. Vous pouvez maintenant vous connecter.",
-      });
-
-    } catch (error: any) {
-      console.error('Error creating admin account:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de créer le compte administrateur: " + (error.message || 'Erreur inconnue'),
-        variant: "destructive",
-      });
-    } finally {
-      setIsCreatingAdmin(false);
+  // Identifiants de démonstration
+  const demoCredentials = {
+    admin: {
+      personalId: 'admin001',
+      schoolId: 'EDU001',
+      password: 'admin2024'
+    },
+    director: {
+      firstName: 'Marie',
+      lastName: 'Dupont',
+      schoolId: 'EDU001',
+      phoneNumber: '0123456789',
+      password: 'director2024'
+    },
+    teacher: {
+      personalId: 'TEACH001',
+      schoolId: 'EDU001',
+      password: 'teacher2024'
+    },
+    student: {
+      personalId: 'STUD001',
+      schoolId: 'EDU001',
+      password: 'student2024'
     }
   };
 
@@ -119,54 +68,96 @@ const Login = () => {
     }
   };
 
-  const validateSignInForm = (): boolean => {
+  const validateForm = (): boolean => {
     const newErrors: Partial<LoginFormData> = {};
 
-    if (!formData.email.trim()) newErrors.email = 'L\'email est requis';
-    if (!formData.password.trim()) newErrors.password = 'Le mot de passe est requis';
+    if (currentRole === 'director') {
+      if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
+      if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
+      if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Le numéro de téléphone est requis';
+    } else {
+      if (!formData.personalId.trim()) newErrors.personalId = 'L\'ID personnel est requis';
+    }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const validateSignUpForm = (): boolean => {
-    const newErrors: Partial<LoginFormData> = {};
-
-    if (!formData.email.trim()) newErrors.email = 'L\'email est requis';
-    if (!formData.password.trim()) newErrors.password = 'Le mot de passe est requis';
-    if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
     if (!formData.schoolId.trim()) newErrors.schoolId = 'L\'ID école est requis';
+    if (!formData.password.trim()) newErrors.password = 'Le mot de passe est requis';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateSignInForm()) return;
+    if (!validateForm()) return;
 
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(formData.email, formData.password);
+      // Simulation d'une requête de connexion
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      if (error) {
-        console.error('Sign in error:', error);
-        toast({
-          title: "Erreur de connexion",
-          description: error.message || "Identifiants incorrects. Veuillez réessayer.",
-          variant: "destructive",
-        });
-      } else {
+      // Vérification des identifiants de démonstration
+      let isValidCredential = false;
+      let userRole = currentRole;
+
+      if (currentRole === 'admin') {
+        isValidCredential = 
+          formData.personalId === demoCredentials.admin.personalId &&
+          formData.schoolId === demoCredentials.admin.schoolId &&
+          formData.password === demoCredentials.admin.password;
+      } else if (currentRole === 'director') {
+        isValidCredential = 
+          formData.firstName === demoCredentials.director.firstName &&
+          formData.lastName === demoCredentials.director.lastName &&
+          formData.schoolId === demoCredentials.director.schoolId &&
+          formData.phoneNumber === demoCredentials.director.phoneNumber &&
+          formData.password === demoCredentials.director.password;
+      } else if (currentRole === 'teacher') {
+        isValidCredential = 
+          formData.personalId === demoCredentials.teacher.personalId &&
+          formData.schoolId === demoCredentials.teacher.schoolId &&
+          formData.password === demoCredentials.teacher.password;
+      } else if (currentRole === 'student') {
+        isValidCredential = 
+          formData.personalId === demoCredentials.student.personalId &&
+          formData.schoolId === demoCredentials.student.schoolId &&
+          formData.password === demoCredentials.student.password;
+      }
+
+      if (isValidCredential) {
+        // Enregistrement des informations de session
+        const userData = {
+          role: userRole,
+          name: currentRole === 'director' 
+            ? `${formData.firstName} ${formData.lastName}`
+            : `Utilisateur ${userRole}`,
+          schoolId: formData.schoolId,
+          loginTime: new Date().toISOString()
+        };
+
+        localStorage.setItem('edumanage_user', JSON.stringify(userData));
+        localStorage.setItem('edumanage_isLoggedIn', 'true');
+
         toast({
           title: "Connexion réussie",
-          description: "Bienvenue !",
+          description: `Bienvenue ${userData.name} !`,
+        });
+
+        // Redirection basée sur le rôle
+        if (userRole === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        toast({
+          title: "Erreur de connexion",
+          description: "Identifiants incorrects. Veuillez réessayer.",
+          variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('Sign in catch error:', error);
       toast({
         title: "Erreur de connexion",
         description: "Une erreur est survenue. Veuillez réessayer.",
@@ -177,66 +168,31 @@ const Login = () => {
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateSignUpForm()) return;
-
-    setIsLoading(true);
-
-    try {
-      const { error } = await signUp(formData.email, formData.password, {
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        phone_number: formData.phoneNumber,
-        school_id: formData.schoolId,
-        role: 'student' // Default role
+  const fillDemoCredentials = (role: string) => {
+    const creds = demoCredentials[role as keyof typeof demoCredentials];
+    if (role === 'director') {
+      const directorCreds = demoCredentials.director;
+      setFormData({
+        ...formData,
+        firstName: directorCreds.firstName,
+        lastName: directorCreds.lastName,
+        schoolId: directorCreds.schoolId,
+        phoneNumber: directorCreds.phoneNumber,
+        password: directorCreds.password,
+        personalId: ''
       });
-
-      if (error) {
-        toast({
-          title: "Erreur d'inscription",
-          description: error.message || "Une erreur est survenue lors de l'inscription.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Inscription réussie",
-          description: "Veuillez vérifier votre email pour confirmer votre compte.",
-        });
-        setCurrentTab('signin');
-      }
-    } catch (error) {
-      toast({
-        title: "Erreur d'inscription",
-        description: "Une erreur est survenue. Veuillez réessayer.",
-        variant: "destructive",
+    } else {
+      setFormData({
+        ...formData,
+        personalId: (creds as any).personalId || '',
+        schoolId: creds.schoolId,
+        password: creds.password,
+        firstName: '',
+        lastName: '',
+        phoneNumber: ''
       });
-    } finally {
-      setIsLoading(false);
     }
   };
-
-  const fillAdminCredentials = () => {
-    setFormData({
-      ...formData,
-      email: 'admin@edumanage.com',
-      password: 'AdminPassword123!'
-    });
-  };
-
-  if (authLoading || profileLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <GraduationCap className="w-8 h-8 text-white animate-pulse" />
-          </div>
-          <p className="text-gray-600 dark:text-gray-300">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
@@ -257,72 +213,60 @@ const Login = () => {
         <Card className="shadow-xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-center text-gray-800 dark:text-gray-100">
-              Authentification
+              Connexion
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs value={currentTab} onValueChange={setCurrentTab}>
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="signin">Connexion</TabsTrigger>
-                <TabsTrigger value="signup">Inscription</TabsTrigger>
+            <Tabs value={currentRole} onValueChange={setCurrentRole}>
+              <TabsList className="grid w-full grid-cols-4 mb-6">
+                <TabsTrigger value="student">Étudiant</TabsTrigger>
+                <TabsTrigger value="teacher">Enseignant</TabsTrigger>
+                <TabsTrigger value="director">Directeur</TabsTrigger>
+                <TabsTrigger value="admin">Admin</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <TabsContent value="student" className="space-y-4 mt-0">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
+                    <Label htmlFor="student-id">ID Étudiant</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
-                        id="signin-email"
-                        type="email"
-                        placeholder="votre@email.com"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        id="student-id"
+                        type="text"
+                        placeholder="Votre ID étudiant"
+                        value={formData.personalId}
+                        onChange={(e) => handleInputChange('personalId', e.target.value)}
                         className="pl-10"
                       />
                     </div>
-                    {errors.email && (
-                      <p className="text-sm text-red-500">{errors.email}</p>
+                    {errors.personalId && (
+                      <p className="text-sm text-red-500">{errors.personalId}</p>
                     )}
                   </div>
+                </TabsContent>
 
+                <TabsContent value="teacher" className="space-y-4 mt-0">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password">Mot de passe</Label>
+                    <Label htmlFor="teacher-id">ID Enseignant</Label>
                     <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
-                        id="signin-password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Votre mot de passe"
-                        value={formData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        className="pr-10"
+                        id="teacher-id"
+                        type="text"
+                        placeholder="Votre ID enseignant"
+                        value={formData.personalId}
+                        onChange={(e) => handleInputChange('personalId', e.target.value)}
+                        className="pl-10"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
                     </div>
-                    {errors.password && (
-                      <p className="text-sm text-red-500">{errors.password}</p>
+                    {errors.personalId && (
+                      <p className="text-sm text-red-500">{errors.personalId}</p>
                     )}
                   </div>
+                </TabsContent>
 
-                  <Button 
-                    type="submit" 
-                    className="w-full btn-primary" 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Connexion...' : 'Se connecter'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-4">
+                <TabsContent value="director" className="space-y-4 mt-0">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">Prénom</Label>
@@ -351,25 +295,7 @@ const Login = () => {
                       )}
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="votre@email.com"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    {errors.email && (
-                      <p className="text-sm text-red-500">{errors.email}</p>
-                    )}
-                  </div>
-
+                  
                   <div className="space-y-2">
                     <Label htmlFor="phoneNumber">Numéro de téléphone</Label>
                     <div className="relative">
@@ -383,98 +309,136 @@ const Login = () => {
                         className="pl-10"
                       />
                     </div>
+                    {errors.phoneNumber && (
+                      <p className="text-sm text-red-500">{errors.phoneNumber}</p>
+                    )}
                   </div>
+                </TabsContent>
 
+                <TabsContent value="admin" className="space-y-4 mt-0">
                   <div className="space-y-2">
-                    <Label htmlFor="schoolId">ID École</Label>
+                    <Label htmlFor="admin-id">ID Administrateur</Label>
                     <div className="relative">
-                      <School className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
-                        id="schoolId"
+                        id="admin-id"
                         type="text"
-                        placeholder="ID de votre école"
-                        value={formData.schoolId}
-                        onChange={(e) => handleInputChange('schoolId', e.target.value)}
+                        placeholder="Votre ID administrateur"
+                        value={formData.personalId}
+                        onChange={(e) => handleInputChange('personalId', e.target.value)}
                         className="pl-10"
                       />
                     </div>
-                    {errors.schoolId && (
-                      <p className="text-sm text-red-500">{errors.schoolId}</p>
+                    {errors.personalId && (
+                      <p className="text-sm text-red-500">{errors.personalId}</p>
                     )}
                   </div>
+                </TabsContent>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Mot de passe</Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Votre mot de passe"
-                        value={formData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    {errors.password && (
-                      <p className="text-sm text-red-500">{errors.password}</p>
-                    )}
+                {/* Champs communs */}
+                <div className="space-y-2">
+                  <Label htmlFor="schoolId">ID École</Label>
+                  <div className="relative">
+                    <School className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="schoolId"
+                      type="text"
+                      placeholder="ID de votre école"
+                      value={formData.schoolId}
+                      onChange={(e) => handleInputChange('schoolId', e.target.value)}
+                      className="pl-10"
+                    />
                   </div>
+                  {errors.schoolId && (
+                    <p className="text-sm text-red-500">{errors.schoolId}</p>
+                  )}
+                </div>
 
-                  <Button 
-                    type="submit" 
-                    className="w-full btn-primary" 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Inscription...' : 'S\'inscrire'}
-                  </Button>
-                </form>
-              </TabsContent>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Mot de passe</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Votre mot de passe"
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-sm text-red-500">{errors.password}</p>
+                  )}
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full btn-primary" 
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Connexion...' : 'Se connecter'}
+                </Button>
+              </form>
             </Tabs>
 
-            {/* Configuration admin */}
-            <div className="mt-6 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Configuration initiale :</strong>
-                  <div className="mt-2 space-y-2">
-                    <p className="text-sm">Si c'est votre première utilisation, créez d'abord le compte administrateur :</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={createAdminAccount}
-                      disabled={isCreatingAdmin}
-                      className="w-full"
-                    >
-                      {isCreatingAdmin ? 'Création en cours...' : 'Créer le compte administrateur'}
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            </div>
-
             {/* Identifiants de démonstration */}
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Compte administrateur de démonstration :</strong>
-                  <div className="mt-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={fillAdminCredentials}
-                      className="h-auto p-1 text-blue-600 hover:text-blue-800"
-                    >
-                      admin@edumanage.com / AdminPassword123!
-                    </Button>
+                  <strong>Identifiants de démonstration :</strong>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Étudiant:</span> 
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => fillDemoCredentials('student')}
+                        className="h-auto p-1 text-blue-600 hover:text-blue-800"
+                      >
+                        STUD001 / EDU001
+                      </Button>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Enseignant:</span> 
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => fillDemoCredentials('teacher')}
+                        className="h-auto p-1 text-blue-600 hover:text-blue-800"
+                      >
+                        TEACH001 / EDU001
+                      </Button>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Directeur:</span> 
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => fillDemoCredentials('director')}
+                        className="h-auto p-1 text-blue-600 hover:text-blue-800"
+                      >
+                        Marie Dupont
+                      </Button>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Admin:</span> 
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => fillDemoCredentials('admin')}
+                        className="h-auto p-1 text-blue-600 hover:text-blue-800"
+                      >
+                        admin001 / EDU001
+                      </Button>
+                    </div>
                   </div>
                 </AlertDescription>
               </Alert>

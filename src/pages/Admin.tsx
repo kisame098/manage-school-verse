@@ -25,19 +25,25 @@ import {
 } from "@/components/ui/dialog";
 import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useProfile';
-import { useDirectors } from '@/hooks/useDirectors';
+
+interface Director {
+  id: string;
+  firstName: string;
+  lastName: string;
+  schoolName: string;
+  schoolId: string;
+  phoneNumber: string;
+  password: string;
+  isActive: boolean;
+  createdAt: string;
+}
 
 const Admin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { signOut, user } = useAuth();
-  const { profile } = useProfile();
-  const { directors, loading, createDirector, updateDirector, deleteDirector } = useDirectors();
-  
+  const [directors, setDirectors] = useState<Director[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDirector, setEditingDirector] = useState<any>(null);
+  const [editingDirector, setEditingDirector] = useState<Director | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
@@ -50,46 +56,96 @@ const Admin = () => {
 
   useEffect(() => {
     // Vérifier l'authentification admin
-    if (!user) {
+    const isLoggedIn = localStorage.getItem('edumanage_isLoggedIn');
+    const userDataStr = localStorage.getItem('edumanage_user');
+    
+    if (!isLoggedIn || !userDataStr) {
       navigate('/login');
       return;
     }
 
-    if (profile && profile.role !== 'admin') {
+    const userData = JSON.parse(userDataStr);
+    if (userData.role !== 'admin') {
       navigate('/dashboard');
       return;
     }
-  }, [user, profile, navigate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    // Charger les directeurs depuis le localStorage
+    loadDirectors();
+  }, [navigate]);
+
+  const loadDirectors = () => {
+    const savedDirectors = localStorage.getItem('edumanage_directors');
+    if (savedDirectors) {
+      setDirectors(JSON.parse(savedDirectors));
+    } else {
+      // Données de démonstration
+      const defaultDirectors: Director[] = [
+        {
+          id: '1',
+          firstName: 'Marie',
+          lastName: 'Dupont',
+          schoolName: 'École Primaire Les Roses',
+          schoolId: 'EDU001',
+          phoneNumber: '0123456789',
+          password: 'director2024',
+          isActive: true,
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: '2',
+          firstName: 'Jean',
+          lastName: 'Martin',
+          schoolName: 'Collège Saint-Antoine',
+          schoolId: 'EDU002',
+          phoneNumber: '0123456788',
+          password: 'director2024',
+          isActive: true,
+          createdAt: new Date().toISOString()
+        }
+      ];
+      setDirectors(defaultDirectors);
+      localStorage.setItem('edumanage_directors', JSON.stringify(defaultDirectors));
+    }
+  };
+
+  const saveDirectors = (updatedDirectors: Director[]) => {
+    setDirectors(updatedDirectors);
+    localStorage.setItem('edumanage_directors', JSON.stringify(updatedDirectors));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (editingDirector) {
-      // TODO: Implement update functionality
+      // Modifier un directeur existant
+      const updatedDirectors = directors.map(director =>
+        director.id === editingDirector.id
+          ? { ...director, ...formData }
+          : director
+      );
+      saveDirectors(updatedDirectors);
       toast({
-        title: "Fonctionnalité en cours",
-        description: "La modification des directeurs sera bientôt disponible.",
-        variant: "destructive",
+        title: "Directeur modifié",
+        description: "Les informations ont été mises à jour avec succès.",
       });
     } else {
       // Ajouter un nouveau directeur
-      const { error } = await createDirector(formData);
-      
-      if (error) {
-        toast({
-          title: "Erreur",
-          description: "Impossible de créer le directeur. Veuillez réessayer.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Directeur ajouté",
-          description: "Le nouveau directeur a été créé avec succès.",
-        });
-        resetForm();
-        setIsModalOpen(false);
-      }
+      const newDirector: Director = {
+        id: Date.now().toString(),
+        ...formData,
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+      saveDirectors([...directors, newDirector]);
+      toast({
+        title: "Directeur ajouté",
+        description: "Le nouveau directeur a été créé avec succès.",
+      });
     }
+
+    resetForm();
+    setIsModalOpen(false);
   };
 
   const resetForm = () => {
@@ -104,93 +160,59 @@ const Admin = () => {
     setEditingDirector(null);
   };
 
-  const handleEdit = (director: any) => {
-    // TODO: Implement edit functionality
+  const handleEdit = (director: Director) => {
+    setEditingDirector(director);
+    setFormData({
+      firstName: director.firstName,
+      lastName: director.lastName,
+      schoolName: director.schoolName,
+      schoolId: director.schoolId,
+      phoneNumber: director.phoneNumber,
+      password: director.password
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (directorId: string) => {
+    const updatedDirectors = directors.filter(director => director.id !== directorId);
+    saveDirectors(updatedDirectors);
     toast({
-      title: "Fonctionnalité en cours",
-      description: "La modification des directeurs sera bientôt disponible.",
-      variant: "destructive",
+      title: "Directeur supprimé",
+      description: "Le directeur a été supprimé avec succès.",
     });
   };
 
-  const handleDelete = async (directorId: string) => {
-    const { error } = await deleteDirector(directorId);
+  const toggleDirectorStatus = (directorId: string) => {
+    const updatedDirectors = directors.map(director =>
+      director.id === directorId
+        ? { ...director, isActive: !director.isActive }
+        : director
+    );
+    saveDirectors(updatedDirectors);
     
-    if (error) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de supprimer le directeur. Veuillez réessayer.",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Directeur supprimé",
-        description: "Le directeur a été supprimé avec succès.",
-      });
-    }
-  };
-
-  const toggleDirectorStatus = async (directorId: string) => {
     const director = directors.find(d => d.id === directorId);
-    if (!director) return;
-
-    const { error } = await updateDirector(directorId, {
-      is_active: !director.is_active
+    toast({
+      title: director?.isActive ? "Directeur désactivé" : "Directeur activé",
+      description: `Le compte a été ${director?.isActive ? 'désactivé' : 'activé'} avec succès.`,
     });
-
-    if (error) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de modifier le statut du directeur.",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: director.is_active ? "Directeur désactivé" : "Directeur activé",
-        description: `Le compte a été ${director.is_active ? 'désactivé' : 'activé'} avec succès.`,
-      });
-    }
   };
 
-  const handleLogout = async () => {
-    const { error } = await signOut();
-    if (!error) {
-      toast({
-        title: "Déconnexion réussie",
-        description: "À bientôt !",
-      });
-      navigate('/login');
-    }
+  const handleLogout = () => {
+    localStorage.removeItem('edumanage_isLoggedIn');
+    localStorage.removeItem('edumanage_user');
+    toast({
+      title: "Déconnexion réussie",
+      description: "À bientôt !",
+    });
+    navigate('/login');
   };
 
-  const filteredDirectors = directors.filter(director => {
-    const firstName = director.profiles?.first_name || '';
-    const lastName = director.profiles?.last_name || '';
-    const schoolName = director.schools?.school_name || '';
-    const schoolId = director.school_id || '';
-    
-    return (
-      firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      schoolName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      schoolId.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
-
-  if (!profile || profile.role !== 'admin') {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Accès non autorisé
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-2">
-            Vous devez être administrateur pour accéder à cette page.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const filteredDirectors = directors.filter(director =>
+    director.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    director.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    director.schoolName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    director.schoolId.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -358,96 +380,90 @@ const Admin = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="text-center py-8">
-                <p className="text-gray-600 dark:text-gray-300">Chargement...</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Nom</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">École</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">ID École</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Téléphone</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Statut</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Actions</th>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Nom</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">École</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">ID École</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Téléphone</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Statut</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-300">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDirectors.map((director) => (
+                    <tr key={director.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-gray-800 dark:text-gray-100">
+                            {director.firstName} {director.lastName}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            ID: {director.id}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-800 dark:text-gray-100">
+                        {director.schoolName}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
+                        {director.schoolId}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
+                        {director.phoneNumber}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge className={director.isActive ? 'status-active' : 'status-inactive'}>
+                          {director.isActive ? 'Actif' : 'Inactif'}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(director)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleDirectorStatus(director.id)}
+                            className={director.isActive 
+                              ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                              : "text-green-600 hover:text-green-700 hover:bg-green-50"
+                            }
+                          >
+                            {director.isActive ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(director.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDirectors.map((director) => (
-                      <tr key={director.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                        <td className="py-3 px-4">
-                          <div>
-                            <p className="font-medium text-gray-800 dark:text-gray-100">
-                              {director.profiles?.first_name} {director.profiles?.last_name}
-                            </p>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">
-                              ID: {director.id}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-gray-800 dark:text-gray-100">
-                          {director.schools?.school_name || 'N/A'}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
-                          {director.school_id}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
-                          {director.profiles?.phone_number || 'N/A'}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge className={director.is_active ? 'status-active' : 'status-inactive'}>
-                            {director.is_active ? 'Actif' : 'Inactif'}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(director)}
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleDirectorStatus(director.id)}
-                              className={director.is_active 
-                                ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-                                : "text-green-600 hover:text-green-700 hover:bg-green-50"
-                              }
-                            >
-                              {director.is_active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(director.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  ))}
+                </tbody>
+              </table>
 
-                {filteredDirectors.length === 0 && !loading && (
-                  <div className="text-center py-8">
-                    <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-300">
-                      {searchTerm ? 'Aucun directeur trouvé pour cette recherche' : 'Aucun directeur enregistré'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+              {filteredDirectors.length === 0 && (
+                <div className="text-center py-8">
+                  <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-300">
+                    {searchTerm ? 'Aucun directeur trouvé pour cette recherche' : 'Aucun directeur enregistré'}
+                  </p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
