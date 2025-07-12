@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LoginFormData {
   email: string;
@@ -29,6 +30,7 @@ const Login = () => {
   const [currentTab, setCurrentTab] = useState('signin');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: '',
@@ -49,6 +51,66 @@ const Login = () => {
       }
     }
   }, [user, profile, authLoading, profileLoading, navigate]);
+
+  const createAdminAccount = async () => {
+    setIsCreatingAdmin(true);
+    try {
+      console.log('Creating admin account...');
+      
+      // First, try to sign up the admin user
+      const { error: signUpError } = await signUp(
+        'admin@edumanage.com',
+        'AdminPassword123!',
+        {
+          first_name: 'Admin',
+          last_name: 'System',
+          phone_number: '+33123456789',
+          school_id: '00000',
+          role: 'admin'
+        }
+      );
+
+      if (signUpError) {
+        // If user already exists, that's fine
+        if (!signUpError.message.includes('already registered')) {
+          throw signUpError;
+        }
+        console.log('Admin user already exists');
+      } else {
+        console.log('Admin user created successfully');
+      }
+
+      // Now try to create/update the admin school
+      const { error: schoolError } = await supabase
+        .from('schools')
+        .upsert({
+          school_id: '00000',
+          school_name: 'Administration Centrale',
+          is_active: true
+        });
+
+      if (schoolError) {
+        console.error('Error creating school:', schoolError);
+      } else {
+        console.log('Admin school created/updated successfully');
+      }
+
+      toast({
+        title: "Compte administrateur créé",
+        description: "Le compte administrateur a été configuré avec succès. Vous pouvez maintenant vous connecter.",
+      });
+
+    } catch (error: any) {
+      console.error('Error creating admin account:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer le compte administrateur: " + (error.message || 'Erreur inconnue'),
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingAdmin(false);
+    }
+  };
 
   const handleInputChange = (field: keyof LoginFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -91,6 +153,7 @@ const Login = () => {
       const { error } = await signIn(formData.email, formData.password);
 
       if (error) {
+        console.error('Sign in error:', error);
         toast({
           title: "Erreur de connexion",
           description: error.message || "Identifiants incorrects. Veuillez réessayer.",
@@ -103,6 +166,7 @@ const Login = () => {
         });
       }
     } catch (error) {
+      console.error('Sign in catch error:', error);
       toast({
         title: "Erreur de connexion",
         description: "Une erreur est survenue. Veuillez réessayer.",
@@ -157,7 +221,7 @@ const Login = () => {
     setFormData({
       ...formData,
       email: 'admin@edumanage.com',
-      password: 'admin2024'
+      password: 'AdminPassword123!'
     });
   };
 
@@ -374,8 +438,30 @@ const Login = () => {
               </TabsContent>
             </Tabs>
 
+            {/* Configuration admin */}
+            <div className="mt-6 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Configuration initiale :</strong>
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm">Si c'est votre première utilisation, créez d'abord le compte administrateur :</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={createAdminAccount}
+                      disabled={isCreatingAdmin}
+                      className="w-full"
+                    >
+                      {isCreatingAdmin ? 'Création en cours...' : 'Créer le compte administrateur'}
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+
             {/* Identifiants de démonstration */}
-            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
@@ -387,7 +473,7 @@ const Login = () => {
                       onClick={fillAdminCredentials}
                       className="h-auto p-1 text-blue-600 hover:text-blue-800"
                     >
-                      admin@edumanage.com / admin2024
+                      admin@edumanage.com / AdminPassword123!
                     </Button>
                   </div>
                 </AlertDescription>
